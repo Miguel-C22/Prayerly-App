@@ -1,7 +1,7 @@
 import Button from "@/components/ui/button";
+import ModalHeader from "@/components/ui/modal-header";
 import Input from "@/components/ui/input";
 import { useTheme } from "@/hooks/use-theme";
-import { Ionicons } from "@expo/vector-icons";
 import React, { useState } from "react";
 import {
   KeyboardAvoidingView,
@@ -13,11 +13,12 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export interface ChangePasswordModalProps {
   visible: boolean;
   onClose: () => void;
-  onSave: (currentPassword: string, newPassword: string) => void;
+  onSave: (currentPassword: string, newPassword: string) => Promise<void>;
 }
 
 export default function ChangePasswordModal({
@@ -25,11 +26,13 @@ export default function ChangePasswordModal({
   onClose,
   onSave,
 }: ChangePasswordModalProps) {
-  const { colors, neutral } = useTheme();
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [error, setError] = useState("");
+  const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const [currentPassword, setCurrentPassword] = useState<string>("");
+  const [newPassword, setNewPassword] = useState<string>("");
+  const [confirmPassword, setConfirmPassword] = useState<string>("");
+  const [error, setError] = useState<string>("");
+  const [loading, setLoading] = useState<boolean>(false);
 
   const resetForm = () => {
     setCurrentPassword("");
@@ -43,7 +46,7 @@ export default function ChangePasswordModal({
     onClose();
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setError("");
 
     if (!currentPassword || !newPassword || !confirmPassword) {
@@ -61,9 +64,15 @@ export default function ChangePasswordModal({
       return;
     }
 
-    onSave(currentPassword, newPassword);
-    resetForm();
-    onClose();
+    setLoading(true);
+    try {
+      await onSave(currentPassword, newPassword);
+      resetForm();
+    } catch (err) {
+      setError("Failed to change password");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -79,18 +88,18 @@ export default function ChangePasswordModal({
       >
         <TouchableOpacity style={styles.backdrop} onPress={handleClose} />
         <View
-          style={[styles.container, { backgroundColor: colors.background }]}
+          style={[
+            styles.container,
+            { backgroundColor: colors.background, paddingTop: insets.top },
+          ]}
         >
-          {/* Header */}
-          <View style={styles.header}>
-            <TouchableOpacity onPress={handleClose}>
-              <Ionicons name="close" size={24} color={colors.text} />
-            </TouchableOpacity>
-            <Text style={[styles.headerTitle, { color: colors.text }]}>
-              Change Password
-            </Text>
-            <View style={{ width: 24 }} />
-          </View>
+          <ModalHeader
+            onClose={handleClose}
+            handleSave={handleSave}
+            loading={loading}
+            title="Change Password"
+            displaySaveLabel={false}
+          />
 
           <ScrollView
             style={styles.content}
@@ -104,6 +113,7 @@ export default function ChangePasswordModal({
               value={currentPassword}
               onChangeText={setCurrentPassword}
               secureTextEntry
+              editable={!loading}
             />
 
             <Input
@@ -113,6 +123,7 @@ export default function ChangePasswordModal({
               value={newPassword}
               onChangeText={setNewPassword}
               secureTextEntry
+              editable={!loading}
             />
 
             <Input
@@ -122,11 +133,16 @@ export default function ChangePasswordModal({
               value={confirmPassword}
               onChangeText={setConfirmPassword}
               secureTextEntry
+              editable={!loading}
             />
 
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-            <Button label="Update Password" onPress={handleSave} />
+            <Button
+              label={loading ? "Updating..." : "Update Password"}
+              onPress={handleSave}
+              disabled={loading}
+            />
           </ScrollView>
         </View>
       </KeyboardAvoidingView>
@@ -140,27 +156,13 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   backdrop: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0,0,0,0.5)",
   },
   container: {
-    height: "90%",
+    flex: 1,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    paddingBottom: 40,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.1)",
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "600",
   },
   content: {
     flex: 1,

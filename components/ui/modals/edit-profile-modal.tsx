@@ -1,6 +1,7 @@
+import ErrorState from "@/components/ui/error-state";
 import Input from "@/components/ui/input";
+import ModalHeader from "@/components/ui/modal-header";
 import { useTheme } from "@/hooks/use-theme";
-import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useState } from "react";
 import {
   KeyboardAvoidingView,
@@ -8,17 +9,17 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export interface EditProfileModalProps {
   visible: boolean;
   onClose: () => void;
   username: string;
   email: string;
-  onSave: (username: string, email: string) => void;
+  onSave: (username: string, email: string) => Promise<void>;
 }
 
 export default function EditProfileModal({
@@ -28,20 +29,33 @@ export default function EditProfileModal({
   email: initialEmail,
   onSave,
 }: EditProfileModalProps) {
-  const { colors, neutral } = useTheme();
-  const [username, setUsername] = useState(initialUsername);
-  const [email, setEmail] = useState(initialEmail);
+  const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const [username, setUsername] = useState<string>(initialUsername);
+  const [email, setEmail] = useState<string>(initialEmail);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setUsername(initialUsername);
     setEmail(initialEmail);
+    setError(null);
   }, [initialUsername, initialEmail]);
 
-  const handleSave = () => {
-    if (username.trim() && email.trim()) {
-      onSave(username.trim(), email.trim());
+  const handleSave = async () => {
+    if (!username.trim() || !email.trim()) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      await onSave(username.trim(), email.trim());
+      setLoading(false);
+      onClose();
+    } catch (err) {
+      setError("Failed to update profile. Please try again.");
+      setLoading(false);
     }
-    onClose();
   };
 
   return (
@@ -57,28 +71,27 @@ export default function EditProfileModal({
       >
         <TouchableOpacity style={styles.backdrop} onPress={onClose} />
         <View
-          style={[styles.container, { backgroundColor: colors.background }]}
+          style={[
+            styles.container,
+            { backgroundColor: colors.background, paddingTop: insets.top },
+          ]}
         >
-          {/* Header */}
-          <View style={styles.header}>
-            <TouchableOpacity onPress={onClose}>
-              <Ionicons name="close" size={24} color={colors.text} />
-            </TouchableOpacity>
-            <Text style={[styles.headerTitle, { color: colors.text }]}>
-              Edit Profile
-            </Text>
-            <TouchableOpacity onPress={handleSave}>
-              <Text style={[styles.saveText, { color: neutral.primary }]}>
-                Save
-              </Text>
-            </TouchableOpacity>
-          </View>
+          <ModalHeader
+            onClose={onClose}
+            handleSave={handleSave}
+            loading={loading}
+            title="Edit Profile"
+            saveLabel="Save"
+          />
 
           <ScrollView
             style={styles.content}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
+            {/* Error Message */}
+            {error && <ErrorState message={error} onRetry={handleSave} />}
+
             <Input
               displayLabel
               label="Username"
@@ -86,6 +99,7 @@ export default function EditProfileModal({
               value={username}
               onChangeText={setUsername}
               autoCapitalize="none"
+              editable={!loading}
             />
 
             <Input
@@ -96,6 +110,7 @@ export default function EditProfileModal({
               onChangeText={setEmail}
               keyboardType="email-address"
               autoCapitalize="none"
+              editable={!loading}
             />
           </ScrollView>
         </View>
@@ -110,31 +125,13 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   backdrop: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0,0,0,0.5)",
   },
   container: {
-    height: "90%",
+    flex: 1,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    paddingBottom: 40,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.1)",
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-  },
-  saveText: {
-    fontSize: 16,
-    fontWeight: "600",
   },
   content: {
     flex: 1,

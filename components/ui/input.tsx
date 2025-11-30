@@ -16,6 +16,7 @@ export interface InputProps extends TextInputProps {
   style?: StyleProp<TextStyle>;
   displayLabel?: boolean;
   label?: string;
+  variant?: "default" | "minimal";
 }
 
 export default function Input({
@@ -24,17 +25,22 @@ export default function Input({
   style,
   displayLabel = false,
   label,
+  variant = "default",
   ...rest
 }: InputProps) {
   const { colors } = useTheme();
 
-  return (
-    <View>
-      {displayLabel && (
-        <Text style={[styles.label, { color: colors.text }]}>{label}</Text>
-      )}
-      <TextInput
-        style={[
+  const inputStyles =
+    variant === "minimal"
+      ? [
+          styles.minimalInput,
+          {
+            backgroundColor: colors.background,
+            color: colors.text,
+          },
+          style,
+        ]
+      : [
           styles.input,
           {
             backgroundColor: colors.inputBackground,
@@ -42,10 +48,23 @@ export default function Input({
             borderColor: colors.card,
           },
           style,
-        ]}
+        ];
+
+  const labelStyles =
+    variant === "minimal"
+      ? [styles.minimalLabel, { color: colors.subtext }]
+      : [styles.label, { color: colors.text }];
+
+  return (
+    <View>
+      {displayLabel && label && (
+        <Text style={labelStyles}>{label}</Text>
+      )}
+      <TextInput
+        style={inputStyles}
         value={value}
         onChangeText={onChangeText}
-        placeholderTextColor="#999"
+        placeholderTextColor={variant === "minimal" ? colors.placeholder : "#999"}
         autoCapitalize="none"
         {...rest}
       />
@@ -68,5 +87,13 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     marginTop: 16,
     paddingLeft: 4,
+  },
+  minimalInput: {
+    fontSize: 16,
+    padding: 0,
+  },
+  minimalLabel: {
+    fontSize: 16,
+    marginBottom: 12,
   },
 });

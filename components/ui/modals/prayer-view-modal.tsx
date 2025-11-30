@@ -1,23 +1,22 @@
 import Button from "@/components/ui/button";
+import ErrorState from "@/components/ui/error-state";
+import Input from "@/components/ui/input";
+import ModalHeader from "@/components/ui/modal-header";
 import { useTheme } from "@/hooks/use-theme";
-import { Ionicons } from "@expo/vector-icons";
-import React from "react";
+import { Prayer } from "@/services/prayers";
+import React, { useEffect, useState } from "react";
 import {
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
-
-export interface Prayer {
-  id: string;
-  title: string;
-  description?: string;
-  answered: boolean;
-  createdAt: string;
-}
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export interface LinkedJournal {
   id: string;
@@ -30,8 +29,8 @@ export interface PrayerViewModalProps {
   onClose: () => void;
   prayer: Prayer | null;
   linkedJournals: LinkedJournal[];
-  onEdit: () => void;
-  onDelete: (prayerId: string) => void;
+  onSave: (prayer: Prayer) => Promise<void>;
+  onDelete: (prayerId: string) => Promise<void>;
 }
 
 export default function PrayerViewModal({
@@ -39,16 +38,59 @@ export default function PrayerViewModal({
   onClose,
   prayer,
   linkedJournals,
-  onEdit,
+  onSave,
   onDelete,
 }: PrayerViewModalProps) {
-  const { colors, neutral } = useTheme();
+  const { colors, neutral, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
+  const [title, setTitle] = useState<string>("");
+  const [description, setDescription] = useState<string>("");
+  const [answered, setAnswered] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleDelete = () => {
+  useEffect(() => {
     if (prayer) {
-      onDelete(prayer.id);
+      setTitle(prayer.title);
+      setDescription(prayer.description || "");
+      setAnswered(prayer.answered);
+      setError(null);
     }
-    onClose();
+  }, [prayer]);
+
+  const handleSave = async () => {
+    if (!prayer || !title.trim()) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      await onSave({
+        ...prayer,
+        title: title.trim(),
+        description: description.trim() || undefined,
+        answered: answered,
+      });
+      setLoading(false);
+    } catch (err) {
+      setError("Failed to save prayer. Please try again.");
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!prayer) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      await onDelete(prayer.id);
+      setLoading(false);
+    } catch (err) {
+      setError("Failed to delete prayer. Please try again.");
+      setLoading(false);
+    }
   };
 
   if (!prayer) return null;
@@ -60,74 +102,86 @@ export default function PrayerViewModal({
       animationType="slide"
       onRequestClose={onClose}
     >
-      <View style={styles.overlay}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={styles.overlay}
+      >
         <TouchableOpacity style={styles.backdrop} onPress={onClose} />
         <View
-          style={[styles.container, { backgroundColor: colors.background }]}
+          style={[
+            styles.container,
+            { backgroundColor: colors.background, paddingTop: insets.top },
+          ]}
         >
-          {/* Header */}
-          <View style={styles.header}>
-            <TouchableOpacity onPress={onClose}>
-              <Ionicons name="close" size={24} color={colors.text} />
-            </TouchableOpacity>
-            {prayer.answered && (
-              <View
-                style={[
-                  styles.answeredBadge,
-                  { backgroundColor: neutral.primary + "20" },
-                ]}
-              >
-                <Ionicons
-                  name="checkmark-circle"
-                  size={16}
-                  color={neutral.primary}
-                />
-                <Text style={[styles.answeredText, { color: neutral.primary }]}>
-                  Answered
-                </Text>
-              </View>
-            )}
-            <TouchableOpacity onPress={onEdit}>
-              <Text style={[styles.editText, { color: neutral.primary }]}>
-                Edit
-              </Text>
-            </TouchableOpacity>
-          </View>
+          <ModalHeader
+            variant="edit"
+            onClose={onClose}
+            handleSave={handleSave}
+            loading={loading}
+            title="Prayer"
+            saveLabel="Save"
+          />
 
           <ScrollView
             style={styles.content}
             showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
           >
-            {/* Prayer Icon */}
-            <View style={styles.iconWrapper}>
-              <View
-                style={[styles.iconContainer, { backgroundColor: colors.card }]}
-              >
-                <Ionicons name="hand-left" size={32} color={neutral.primary} />
-              </View>
-            </View>
+            {/* Error Message */}
+            {error && <ErrorState message={error} onRetry={handleSave} />}
 
-            {/* Title */}
-            <Text style={[styles.title, { color: colors.text }]}>
-              {prayer.title}
-            </Text>
+            {/* Title Input */}
+            <Input
+              variant="minimal"
+              displayLabel={false}
+              placeholder="Enter prayer title..."
+              value={title}
+              onChangeText={setTitle}
+              editable={!loading}
+              style={styles.titleInput}
+            />
+
+            {/* Description Input */}
+            <Input
+              variant="minimal"
+              displayLabel={false}
+              placeholder="Add a description for your prayer..."
+              value={description}
+              onChangeText={setDescription}
+              multiline
+              textAlignVertical="top"
+              editable={!loading}
+              style={styles.descriptionInput}
+            />
+
+            {/* Divider */}
+            <View
+              style={[
+                styles.divider,
+                { backgroundColor: isDark ? colors.card : "#000000" },
+              ]}
+            />
 
             {/* Date */}
             <Text style={[styles.date, { color: colors.subtext }]}>
-              Created {prayer.createdAt}
+              Created {new Date(prayer.created_at).toLocaleDateString()}
             </Text>
 
-            {/* Description */}
-            {prayer.description && (
-              <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                  Description
-                </Text>
-                <Text style={[styles.description, { color: colors.subtext }]}>
-                  {prayer.description}
-                </Text>
-              </View>
-            )}
+            {/* Answered Toggle */}
+            <View
+              style={[styles.answeredSection, { backgroundColor: colors.card }]}
+            >
+              <Text style={[styles.answeredLabel, { color: colors.text }]}>
+                Answered
+              </Text>
+              <Switch
+                value={answered}
+                onValueChange={setAnswered}
+                trackColor={{ false: colors.background, true: neutral.primary }}
+                thumbColor="#fff"
+                disabled={loading}
+              />
+            </View>
 
             {/* Linked Journals */}
             {linkedJournals.length > 0 && (
@@ -160,15 +214,19 @@ export default function PrayerViewModal({
             )}
           </ScrollView>
 
-          {/* Delete Button */}
-          <Button
-            label="Delete Prayer"
-            onPress={handleDelete}
-            style={styles.deleteButton}
-            textStyle={{ color: neutral.primary }}
-          />
+          {/* Footer - Fixed at bottom */}
+          <View style={styles.footer}>
+            {/* Delete Button */}
+            <Button
+              label="Delete Prayer"
+              onPress={handleDelete}
+              style={styles.deleteButton}
+              textStyle={{ color: neutral.primary }}
+              loading={loading}
+            />
+          </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -179,63 +237,58 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   backdrop: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0,0,0,0.5)",
   },
   container: {
-    height: "90%",
+    flex: 1,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    paddingBottom: 40,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-  answeredBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  answeredText: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  editText: {
-    fontSize: 16,
-    fontWeight: "600",
   },
   content: {
     flex: 1,
     paddingHorizontal: 20,
   },
-  iconWrapper: {
-    alignItems: "center",
-    marginBottom: 16,
+  footer: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    paddingTop: 12,
   },
-  iconContainer: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: "700",
-    textAlign: "center",
-    marginBottom: 8,
+  divider: {
+    height: 1,
+    marginVertical: 16,
   },
   date: {
-    fontSize: 14,
-    textAlign: "center",
+    fontSize: 13,
+    color: "#999",
+    marginBottom: 8,
+  },
+  answeredSection: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 16,
+    marginTop: 16,
     marginBottom: 24,
+  },
+  answeredLabel: {
+    fontSize: 17,
+    fontWeight: "500",
+  },
+  titleInput: {
+    fontSize: 28,
+    fontWeight: "700",
+    marginBottom: 16,
+    paddingHorizontal: 0,
+  },
+  descriptionInput: {
+    fontSize: 15,
+    lineHeight: 22,
+    minHeight: 80,
+    marginBottom: 16,
+    paddingHorizontal: 0,
   },
   section: {
     marginBottom: 24,
@@ -244,10 +297,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     marginBottom: 12,
-  },
-  description: {
-    fontSize: 16,
-    lineHeight: 24,
   },
   journalItem: {
     padding: 16,
@@ -265,7 +314,5 @@ const styles = StyleSheet.create({
   },
   deleteButton: {
     backgroundColor: "transparent",
-    marginHorizontal: 20,
-    marginTop: 10,
   },
 });

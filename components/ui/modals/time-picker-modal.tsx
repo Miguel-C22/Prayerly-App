@@ -1,3 +1,4 @@
+import ModalHeader from "@/components/ui/modal-header";
 import { useTheme } from "@/hooks/use-theme";
 import { generateTimeSlots } from "@/utils/generate-time-slots";
 import { Ionicons } from "@expo/vector-icons";
@@ -43,15 +44,11 @@ export default function TimePickerModal({
       <View style={styles.overlay}>
         <TouchableOpacity style={styles.backdrop} onPress={onClose} />
         <View style={[styles.container, { backgroundColor: colors.card }]}>
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={[styles.title, { color: colors.text }]}>
-              Select Time
-            </Text>
-            <TouchableOpacity onPress={onClose}>
-              <Ionicons name="close" size={24} color={colors.text} />
-            </TouchableOpacity>
-          </View>
+          <ModalHeader
+            variant="picker"
+            title="Select Time"
+            onClose={onClose}
+          />
 
           {/* Time List */}
           <FlatList
@@ -110,19 +107,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingBottom: 40,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.1)",
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: "600",
   },
   timeItem: {
     flexDirection: "row",

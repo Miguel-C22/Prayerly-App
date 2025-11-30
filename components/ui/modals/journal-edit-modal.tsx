@@ -1,23 +1,24 @@
 import Button from "@/components/ui/button";
+import ErrorState from "@/components/ui/error-state";
+import Input from "@/components/ui/input";
+import ModalHeader from "@/components/ui/modal-header";
+import { usePrayers } from "@/contexts/PrayersContext";
 import { useTheme } from "@/hooks/use-theme";
+import { Prayer } from "@/services/prayers";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useState } from "react";
 import {
   KeyboardAvoidingView,
   Modal,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import PrayerPickerModal from "./prayer-picker-modal";
-
-export interface Prayer {
-  id: string;
-  title: string;
-}
 
 export interface JournalEntry {
   id: string;
@@ -30,48 +31,67 @@ export interface JournalEditModalProps {
   visible: boolean;
   onClose: () => void;
   journal: JournalEntry | null;
-  prayers: Prayer[];
-  onSave: (journal: JournalEntry) => void;
-  onDelete: (journalId: string) => void;
+  onSave: (journal: JournalEntry) => Promise<void>;
+  onDelete: (journalId: string) => Promise<void>;
 }
 
 export default function JournalEditModal({
   visible,
   onClose,
   journal,
-  prayers,
   onSave,
   onDelete,
 }: JournalEditModalProps) {
   const { colors, neutral } = useTheme();
-  const [content, setContent] = useState("");
+  const insets = useSafeAreaInsets();
+  const { prayers } = usePrayers();
+  const [content, setContent] = useState<string>("");
   const [selectedPrayer, setSelectedPrayer] = useState<Prayer | null>(null);
-  const [showPrayerPicker, setShowPrayerPicker] = useState(false);
+  const [showPrayerPicker, setShowPrayerPicker] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (journal) {
       setContent(journal.content);
       const linkedPrayer = prayers.find((p) => p.id === journal.linkedPrayerId);
       setSelectedPrayer(linkedPrayer || null);
+      setError(null);
     }
   }, [journal, prayers]);
 
-  const handleSave = () => {
-    if (journal) {
-      onSave({
+  const handleSave = async () => {
+    if (!journal) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      await onSave({
         ...journal,
         content,
         linkedPrayerId: selectedPrayer?.id,
       });
+    } catch (err) {
+      setError("Failed to save journal. Please try again.");
+      setLoading(false);
     }
-    onClose();
+    setLoading(false);
   };
 
-  const handleDelete = () => {
-    if (journal) {
-      onDelete(journal.id);
+  const handleDelete = async () => {
+    if (!journal) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      await onDelete(journal.id);
+      setLoading(false);
+    } catch (err) {
+      setError("Failed to delete journal. Please try again.");
+      setLoading(false);
     }
-    onClose();
   };
 
   return (
@@ -87,68 +107,71 @@ export default function JournalEditModal({
       >
         <TouchableOpacity style={styles.backdrop} onPress={onClose} />
         <View
-          style={[styles.container, { backgroundColor: colors.background }]}
+          style={[
+            styles.container,
+            { backgroundColor: colors.background, paddingTop: insets.top },
+          ]}
         >
-          {/* Header */}
-          <View style={styles.header}>
-            <TouchableOpacity onPress={onClose}>
-              <Ionicons name="close" size={24} color={colors.text} />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={handleSave}>
-              <Text style={[styles.saveText, { color: neutral.primary }]}>
-                Save
-              </Text>
-            </TouchableOpacity>
-          </View>
+          <ModalHeader
+            onClose={onClose}
+            handleSave={handleSave}
+            loading={loading}
+            title="Journal"
+            saveLabel="Save"
+          />
 
-          {/* Date */}
-          <Text style={[styles.date, { color: colors.subtext }]}>
-            {journal?.date}
-          </Text>
-
-          {/* Prayer Selector */}
-          <TouchableOpacity
-            style={[styles.prayerSelector, { borderColor: colors.card }]}
-            onPress={() => setShowPrayerPicker(true)}
+          <ScrollView
+            style={styles.content}
+            showsVerticalScrollIndicator={false}
           >
-            <View style={styles.prayerLeft}>
-              <Ionicons name="link" size={18} color={neutral.primary} />
-              <Text style={[styles.prayerText, { color: neutral.primary }]}>
-                {selectedPrayer?.title || "Link to Prayer"}
-              </Text>
-            </View>
-            <Ionicons name="chevron-down" size={20} color={colors.subtext} />
-          </TouchableOpacity>
+            {/* Error Message */}
+            {error && <ErrorState message={error} onRetry={handleSave} />}
 
-          {/* Prompt */}
-          <Text style={[styles.prompt, { color: colors.subtext }]}>
-            What are you thankful for today?
-          </Text>
+            {/* Date */}
+            <Text style={[styles.date, { color: colors.subtext }]}>
+              {journal?.date}
+            </Text>
 
-          {/* Content Input */}
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: colors.background,
-                color: colors.text,
-              },
-            ]}
-            placeholder="Write your thoughts..."
-            placeholderTextColor={colors.placeholder}
-            value={content}
-            onChangeText={setContent}
-            multiline
-            textAlignVertical="top"
-          />
+            {/* Prayer Selector */}
+            <TouchableOpacity
+              style={[styles.prayerSelector, { borderColor: colors.card }]}
+              onPress={() => setShowPrayerPicker(true)}
+              disabled={loading}
+            >
+              <View style={styles.prayerLeft}>
+                <Ionicons name="link" size={18} color={neutral.primary} />
+                <Text style={[styles.prayerText, { color: neutral.primary }]}>
+                  {selectedPrayer?.title || "Link to Prayer"}
+                </Text>
+              </View>
+              <Ionicons name="chevron-down" size={20} color={colors.subtext} />
+            </TouchableOpacity>
 
-          {/* Delete Button */}
-          <Button
-            label="Delete Journal"
-            onPress={handleDelete}
-            style={styles.deleteButton}
-            textStyle={{ color: neutral.primary }}
-          />
+            {/* Content Input */}
+            <Input
+              variant="minimal"
+              displayLabel
+              label="What are you thankful for today?"
+              placeholder="Write your thoughts..."
+              value={content}
+              onChangeText={setContent}
+              multiline
+              textAlignVertical="top"
+              editable={!loading}
+              style={styles.input}
+            />
+          </ScrollView>
+
+          {/* Delete Button - Fixed at bottom */}
+          <View style={styles.footer}>
+            <Button
+              label="Delete Journal"
+              onPress={handleDelete}
+              style={styles.deleteButton}
+              textStyle={{ color: neutral.primary }}
+              loading={loading}
+            />
+          </View>
         </View>
       </KeyboardAvoidingView>
 
@@ -156,7 +179,6 @@ export default function JournalEditModal({
       <PrayerPickerModal
         visible={showPrayerPicker}
         onClose={() => setShowPrayerPicker(false)}
-        prayers={prayers}
         selectedPrayer={selectedPrayer}
         onSelectPrayer={setSelectedPrayer}
       />
@@ -170,25 +192,22 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   backdrop: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0,0,0,0.5)",
   },
   container: {
-    height: "90%",
+    flex: 1,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
+  },
+  content: {
+    flex: 1,
     paddingHorizontal: 20,
-    paddingBottom: 40,
   },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 16,
-  },
-  saveText: {
-    fontSize: 16,
-    fontWeight: "600",
+  footer: {
+    paddingHorizontal: 20,
+    paddingBottom: 0,
+    paddingTop: 0,
   },
   date: {
     fontSize: 14,
@@ -213,10 +232,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "500",
   },
-  prompt: {
-    fontSize: 16,
-    marginBottom: 16,
-  },
   input: {
     flex: 1,
     fontSize: 16,
@@ -224,6 +239,5 @@ const styles = StyleSheet.create({
   },
   deleteButton: {
     backgroundColor: "transparent",
-    marginTop: 20,
   },
 });

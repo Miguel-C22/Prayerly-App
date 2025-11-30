@@ -1,5 +1,5 @@
 import { Colors, neutralColors, ThemeColors } from "@/constants/theme";
-import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useThemeContext } from "@/contexts/ThemeContext";
 
 type Theme = {
   colors: ThemeColors;
@@ -18,7 +18,7 @@ type Theme = {
  * </View>
  */
 export function useTheme(): Theme {
-  const colorScheme = useColorScheme();
+  const { colorScheme } = useThemeContext();
   const isDark = colorScheme === "dark";
 
   return {

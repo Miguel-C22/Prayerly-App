@@ -1,11 +1,12 @@
 import { SplashScreenController } from "@/components/auth/splash-screen-controller";
+import { ThemeProvider as CustomThemeProvider } from "@/contexts/ThemeContext";
 import { useAuthContext } from "@/hooks/auth/use-auth-context";
-import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useTheme } from "@/hooks/use-theme";
 import AuthProvider from "@/providers/auth-provider";
 import {
   DarkTheme,
   DefaultTheme,
-  ThemeProvider,
+  ThemeProvider as NavigationThemeProvider,
 } from "@react-navigation/native";
 import { Redirect, Stack, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -39,18 +40,26 @@ function RootNavigator() {
   );
 }
 
-export default function RootLayout() {
-  const colorScheme = useColorScheme();
+function ThemedApp() {
+  const { isDark } = useTheme();
 
   return (
-    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+    <NavigationThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
       <Pressable style={{ flex: 1 }} onPress={Keyboard.dismiss}>
         <AuthProvider>
           <SplashScreenController />
           <RootNavigator />
-          <StatusBar style="auto" />
+          <StatusBar style={isDark ? "light" : "dark"} />
         </AuthProvider>
       </Pressable>
-    </ThemeProvider>
+    </NavigationThemeProvider>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <CustomThemeProvider>
+      <ThemedApp />
+    </CustomThemeProvider>
   );
 }

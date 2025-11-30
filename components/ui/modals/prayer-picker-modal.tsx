@@ -1,24 +1,22 @@
+import ModalHeader from "@/components/ui/modal-header";
+import { usePrayers } from "@/contexts/PrayersContext";
 import { useTheme } from "@/hooks/use-theme";
+import { Prayer } from "@/services/prayers";
 import { Ionicons } from "@expo/vector-icons";
-import React from "react";
+import React, { useState } from "react";
 import {
   FlatList,
   Modal,
+  RefreshControl,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
 
-export interface Prayer {
-  id: string;
-  title: string;
-}
-
 export interface PrayerPickerModalProps {
   visible: boolean;
   onClose: () => void;
-  prayers: Prayer[];
   selectedPrayer: Prayer | null;
   onSelectPrayer: (prayer: Prayer | null) => void;
 }
@@ -26,11 +24,18 @@ export interface PrayerPickerModalProps {
 export default function PrayerPickerModal({
   visible,
   onClose,
-  prayers,
   selectedPrayer,
   onSelectPrayer,
 }: PrayerPickerModalProps) {
   const { colors, neutral } = useTheme();
+  const { prayers, refetch } = usePrayers();
+  const [refreshing, setRefreshing] = useState<boolean>(false);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await refetch();
+    setRefreshing(false);
+  };
 
   const handleSelect = (prayer: Prayer | null) => {
     onSelectPrayer(prayer);
@@ -47,15 +52,11 @@ export default function PrayerPickerModal({
       <View style={styles.overlay}>
         <TouchableOpacity style={styles.backdrop} onPress={onClose} />
         <View style={[styles.container, { backgroundColor: colors.card }]}>
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={[styles.title, { color: colors.text }]}>
-              Link to Prayer
-            </Text>
-            <TouchableOpacity onPress={onClose}>
-              <Ionicons name="close" size={24} color={colors.text} />
-            </TouchableOpacity>
-          </View>
+          <ModalHeader
+            variant="picker"
+            title="Link to Prayer"
+            onClose={onClose}
+          />
 
           {/* None option */}
           <TouchableOpacity
@@ -89,6 +90,14 @@ export default function PrayerPickerModal({
             data={prayers}
             keyExtractor={(item) => item.id}
             showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
+                tintColor={neutral.primary}
+                colors={[neutral.primary]}
+              />
+            }
             renderItem={({ item }) => {
               const isSelected = selectedPrayer?.id === item.id;
               return (
@@ -144,23 +153,10 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.5)",
   },
   container: {
-    maxHeight: "60%",
+    height: "50%",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingBottom: 40,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.1)",
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: "600",
   },
   divider: {
     height: 1,

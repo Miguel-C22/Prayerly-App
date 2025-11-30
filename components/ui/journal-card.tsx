@@ -10,13 +10,13 @@ export interface JournalCardProps {
 }
 
 export default function JournalCard({ date, preview, onPress }: JournalCardProps) {
-  const { colors, neutral, isDark } = useTheme();
+  const { colors, neutral } = useTheme();
 
   return (
     <TouchableOpacity
       style={[
         styles.container,
-        { backgroundColor: isDark ? colors.card : "#f5f5f5" },
+        { backgroundColor: colors.card },
       ]}
       onPress={onPress}
     >
@@ -25,7 +25,7 @@ export default function JournalCard({ date, preview, onPress }: JournalCardProps
           {date.toUpperCase()}
         </Text>
         <Text
-          style={[styles.preview, { color: isDark ? colors.text : "#333" }]}
+          style={[styles.preview, { color: colors.text }]}
           numberOfLines={2}
         >
           {preview}

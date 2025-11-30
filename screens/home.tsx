@@ -1,120 +1,51 @@
-import PrayerEditModal from "@/components/ui/modals/prayer-edit-modal";
-import PrayerViewModal, {
-  LinkedJournal,
-} from "@/components/ui/modals/prayer-view-modal";
-import PrayerCard, { Prayer } from "@/components/ui/prayer-card";
+import ErrorState from "@/components/ui/error-state";
+import Loader from "@/components/ui/loader";
+import PrayerViewModal from "@/components/ui/modals/prayer-view-modal";
+import PrayerCard from "@/components/ui/prayer-card";
 import SearchInput from "@/components/ui/search-input";
 import SegmentedControl from "@/components/ui/segmented-control";
+import { usePrayers } from "@/contexts/PrayersContext";
+import { useReminders } from "@/contexts/RemindersContext";
 import { useTheme } from "@/hooks/use-theme";
+import { deletePrayer, Prayer, updatePrayer } from "@/services/prayers";
 import { useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
-
-const MOCK_PRAYERS: Prayer[] = [
-  {
-    id: "1",
-    title: "For Mom's health",
-    description:
-      "Praying for my mother's recovery from her surgery. Lord, guide the doctors and bring her strength.",
-    answered: false,
-    createdAt: "April 15, 2024",
-  },
-  {
-    id: "2",
-    title: "Wisdom for my family",
-    description:
-      "Asking God for wisdom in making important family decisions about moving to a new city.",
-    answered: false,
-    createdAt: "April 10, 2024",
-  },
-  {
-    id: "3",
-    title: "Peace during a difficult time",
-    description:
-      "Going through a challenging season at work. Praying for peace and clarity.",
-    answered: false,
-    createdAt: "April 5, 2024",
-  },
-  {
-    id: "4",
-    title: "Guidance for career change",
-    description: "Seeking God's direction as I consider a new job opportunity.",
-    answered: false,
-    createdAt: "March 28, 2024",
-  },
-  {
-    id: "5",
-    title: "Healing for a friend",
-    description:
-      "My close friend was diagnosed with an illness. Praying for complete healing.",
-    answered: false,
-    createdAt: "March 20, 2024",
-  },
-  {
-    id: "6",
-    title: "Strength to overcome anxiety",
-    description:
-      "Struggling with anxiety lately. Asking for God's peace that surpasses understanding.",
-    answered: true,
-    createdAt: "March 15, 2024",
-  },
-  {
-    id: "7",
-    title: "Restoration of relationship",
-    description:
-      "Praying for reconciliation with a family member after a disagreement.",
-    answered: true,
-    createdAt: "March 10, 2024",
-  },
-  {
-    id: "8",
-    title: "Financial provision",
-    description: "Trusting God for provision during an unexpected expense.",
-    answered: true,
-    createdAt: "February 28, 2024",
-  },
-  {
-    id: "9",
-    title: "Safe travels",
-    description: "Praying for safety during my upcoming trip.",
-    answered: true,
-    createdAt: "February 20, 2024",
-  },
-  {
-    id: "10",
-    title: "Patience with children",
-    description: "Asking for more patience and wisdom in parenting my kids.",
-    answered: true,
-    createdAt: "February 15, 2024",
-  },
-];
-
-const MOCK_LINKED_JOURNALS: LinkedJournal[] = [
-  {
-    id: "1",
-    date: "April 28, 2024",
-    preview:
-      "Reflecting on His grace today. I felt a profound sense of peace...",
-  },
-  {
-    id: "2",
-    date: "April 25, 2024",
-    preview: "Grateful for the small blessings - a warm cup of coffee...",
-  },
-];
+import {
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
 export default function HomeScreen() {
-  const { colors } = useTheme();
-  const [prayers, setPrayers] = useState(MOCK_PRAYERS);
-  const [selectedTab, setSelectedTab] = useState(0);
-  const [searchQuery, setSearchQuery] = useState("");
+  const { colors, neutral } = useTheme();
+  const {
+    prayers,
+    loading,
+    error,
+    refetch,
+    updateOptimistic,
+    deleteOptimistic,
+    revert,
+  } = usePrayers();
+  const {
+    refetch: refetchReminders,
+    updatePrayerInReminders,
+    deleteOptimistic: deleteReminderOptimistic,
+    revert: revertReminders,
+  } = useReminders();
+  const [selectedTab, setSelectedTab] = useState<number>(0);
+  const [searchQuery, setSearchQuery] = useState<string>("");
   const [selectedPrayer, setSelectedPrayer] = useState<Prayer | null>(null);
-  const [showPrayerModal, setShowPrayerModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
+  const [showPrayerModal, setShowPrayerModal] = useState<boolean>(false);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
 
-  const handleToggleAnswered = (prayerId: string, answered: boolean) => {
-    setPrayers((prev) =>
-      prev.map((p) => (p.id === prayerId ? { ...p, answered } : p))
-    );
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    // Pull-to-refresh is the only time we fetch from database
+    await Promise.all([refetch(), refetchReminders()]);
+    setRefreshing(false);
   };
 
   const handleOpenPrayer = (prayer: Prayer) => {
@@ -122,23 +53,58 @@ export default function HomeScreen() {
     setShowPrayerModal(true);
   };
 
-  const handleDeletePrayer = (prayerId: string) => {
-    setPrayers((prev) => prev.filter((p) => p.id !== prayerId));
-    setShowPrayerModal(false);
+  const handleDeletePrayer = async (prayerId: string) => {
+    try {
+      // Optimistically delete from both contexts
+      deleteOptimistic(prayerId);
+      deleteReminderOptimistic(prayerId);
+      setShowPrayerModal(false);
+
+      // Delete from database in background
+      const { error } = await deletePrayer(prayerId);
+
+      if (error) {
+        // Revert both contexts
+        await Promise.all([revert(), revertReminders()]);
+        throw new Error("Failed to delete prayer");
+      }
+    } catch (error) {
+      // Revert both contexts
+      await Promise.all([revert(), revertReminders()]);
+      throw error;
+    }
   };
 
-  const handleEditPrayer = () => {
-    setShowPrayerModal(false);
-    setShowEditModal(true);
-  };
+  const handleSavePrayer = async (updatedPrayer: Prayer) => {
+    try {
+      const updates = {
+        title: updatedPrayer.title,
+        description: updatedPrayer.description,
+        answered: updatedPrayer.answered,
+      };
 
-  const handleSavePrayer = (updatedPrayer: Prayer) => {
-    setPrayers((prev) =>
-      prev.map((p) => (p.id === updatedPrayer.id ? updatedPrayer : p))
-    );
-    setSelectedPrayer(updatedPrayer);
-    setShowEditModal(false);
-    setShowPrayerModal(true);
+      // Optimistically update both contexts
+      updateOptimistic(updatedPrayer.id, updates);
+      updatePrayerInReminders(updatedPrayer.id, updates);
+      setSelectedPrayer({ ...updatedPrayer, ...updates });
+      setShowPrayerModal(false);
+
+      // Save to database in background
+      const { data, error } = await updatePrayer(updatedPrayer.id, updates);
+
+      if (error || !data) {
+        // Revert both contexts
+        await Promise.all([revert(), revertReminders()]);
+        throw new Error("Failed to update prayer");
+      }
+
+      // Update selectedPrayer with actual DB response
+      setSelectedPrayer(data);
+    } catch (error) {
+      // Revert both contexts
+      await Promise.all([revert(), revertReminders()]);
+      throw error;
+    }
   };
 
   // Filter prayers based on tab and search
@@ -149,6 +115,22 @@ export default function HomeScreen() {
       .includes(searchQuery.toLowerCase());
     return matchesTab && matchesSearch;
   });
+
+  if (loading && prayers.length === 0) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <Loader text="Loading prayers..." />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <ErrorState message={error} onRetry={refetch} />
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -169,50 +151,54 @@ export default function HomeScreen() {
 
         {/* Prayer List */}
         <ScrollView
+          style={styles.scrollView}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
+          alwaysBounceVertical={true}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={neutral.primary}
+              colors={[neutral.primary]}
+            />
+          }
         >
           {filteredPrayers.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={[styles.emptyText, { color: colors.subtext }]}>
-                {searchQuery
-                  ? "No prayers found"
-                  : selectedTab === 0
-                  ? "No unanswered prayers"
-                  : "No answered prayers yet"}
-              </Text>
-            </View>
+            <Pressable style={styles.fillSpaceEmpty} onPress={() => {}}>
+              <View style={styles.emptyState}>
+                <Text style={[styles.emptyText, { color: colors.subtext }]}>
+                  {searchQuery
+                    ? "No prayers found"
+                    : selectedTab === 0
+                    ? "No unanswered prayers"
+                    : "No answered prayers yet"}
+                </Text>
+              </View>
+            </Pressable>
           ) : (
-            filteredPrayers.map((prayer) => (
-              <PrayerCard
-                key={prayer.id}
-                prayer={prayer}
-                onPress={() => handleOpenPrayer(prayer)}
-                onToggleAnswered={(answered) =>
-                  handleToggleAnswered(prayer.id, answered)
-                }
-              />
-            ))
+            <>
+              {filteredPrayers.map((prayer) => (
+                <PrayerCard
+                  key={prayer.id}
+                  prayer={prayer}
+                  onPress={() => handleOpenPrayer(prayer)}
+                />
+              ))}
+              <Pressable style={styles.fillSpace} onPress={() => {}} />
+            </>
           )}
         </ScrollView>
       </View>
 
-      {/* Prayer View Modal */}
+      {/* Prayer Modal */}
       <PrayerViewModal
         visible={showPrayerModal}
         onClose={() => setShowPrayerModal(false)}
         prayer={selectedPrayer}
-        linkedJournals={MOCK_LINKED_JOURNALS}
-        onEdit={handleEditPrayer}
-        onDelete={handleDeletePrayer}
-      />
-
-      {/* Prayer Edit Modal */}
-      <PrayerEditModal
-        visible={showEditModal}
-        onClose={() => setShowEditModal(false)}
-        prayer={selectedPrayer}
+        linkedJournals={[]}
         onSave={handleSavePrayer}
+        onDelete={handleDeletePrayer}
       />
     </View>
   );
@@ -227,8 +213,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 16,
   },
+  scrollView: {
+    flex: 1,
+  },
   scrollContent: {
     paddingBottom: 40,
+    flexGrow: 1,
+  },
+  fillSpace: {
+    height: 100,
+  },
+  fillSpaceEmpty: {
+    flex: 1,
   },
   emptyState: {
     flex: 1,
