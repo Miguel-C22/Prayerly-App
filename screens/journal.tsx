@@ -6,7 +6,7 @@ import JournalEditModal, {
 } from "@/components/ui/modals/journal-edit-modal";
 import { useJournal } from "@/contexts/JournalContext";
 import { useTheme } from "@/hooks/use-theme";
-import { deleteJournal, updateJournal } from "@/services/journal";
+import { useJournalActions } from "@/hooks/use-journal-actions";
 import { useEffect, useState } from "react";
 import {
   Pressable,
@@ -24,10 +24,8 @@ export default function JournalScreen() {
     loading,
     error,
     refetch,
-    updateOptimistic,
-    deleteOptimistic,
-    revert,
   } = useJournal();
+  const { handleUpdateJournal, handleDeleteJournal } = useJournalActions();
   const [journals, setJournals] = useState<JournalEntry[]>([]);
   const [selectedJournal, setSelectedJournal] = useState<JournalEntry | null>(
     null
@@ -56,54 +54,6 @@ export default function JournalScreen() {
   const handleOpenJournal = (journal: JournalEntry) => {
     setSelectedJournal(journal);
     setShowEditModal(true);
-  };
-
-  const handleSaveJournal = async (updatedJournal: JournalEntry) => {
-    try {
-      const updates = {
-        content: updatedJournal.content,
-        date: updatedJournal.date,
-        linked_prayer_id: updatedJournal.linkedPrayerId,
-      };
-
-      // Optimistically update context
-      updateOptimistic(updatedJournal.id, updates);
-      setShowEditModal(false);
-
-      // Save to database in background
-      const { data, error } = await updateJournal(updatedJournal.id, updates);
-
-      if (error || !data) {
-        // Revert optimistic update
-        await revert();
-        throw new Error("Failed to update journal");
-      }
-    } catch (error) {
-      // Revert optimistic update
-      await revert();
-      throw error;
-    }
-  };
-
-  const handleDeleteJournal = async (journalId: string) => {
-    try {
-      // Optimistically delete from context
-      deleteOptimistic(journalId);
-      setShowEditModal(false);
-
-      // Delete from database in background
-      const { error } = await deleteJournal(journalId);
-
-      if (error) {
-        // Revert optimistic update
-        await revert();
-        throw new Error("Failed to delete journal");
-      }
-    } catch (error) {
-      // Revert optimistic update
-      await revert();
-      throw error;
-    }
   };
 
   if (loading && journals.length === 0) {
@@ -164,7 +114,7 @@ export default function JournalScreen() {
         visible={showEditModal}
         onClose={() => setShowEditModal(false)}
         journal={selectedJournal}
-        onSave={handleSaveJournal}
+        onSave={handleUpdateJournal}
         onDelete={handleDeleteJournal}
       />
     </View>

@@ -1,14 +1,16 @@
 import ErrorState from "@/components/ui/error-state";
 import Loader from "@/components/ui/loader";
-import PrayerViewModal from "@/components/ui/modals/prayer-view-modal";
+import PrayerViewModal, { LinkedJournal } from "@/components/ui/modals/prayer-view-modal";
 import PrayerCard from "@/components/ui/prayer-card";
 import SearchInput from "@/components/ui/search-input";
 import SegmentedControl from "@/components/ui/segmented-control";
 import { usePrayers } from "@/contexts/PrayersContext";
 import { useReminders } from "@/contexts/RemindersContext";
+import { useJournal } from "@/contexts/JournalContext";
 import { useTheme } from "@/hooks/use-theme";
+import { useJournalActions } from "@/hooks/use-journal-actions";
 import { deletePrayer, Prayer, updatePrayer } from "@/services/prayers";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   Pressable,
   RefreshControl,
@@ -35,11 +37,24 @@ export default function HomeScreen() {
     deleteOptimistic: deleteReminderOptimistic,
     revert: revertReminders,
   } = useReminders();
+  const { journals } = useJournal();
+  const { handleUpdateJournal, handleDeleteJournal } = useJournalActions();
   const [selectedTab, setSelectedTab] = useState<number>(0);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [selectedPrayer, setSelectedPrayer] = useState<Prayer | null>(null);
   const [showPrayerModal, setShowPrayerModal] = useState<boolean>(false);
   const [refreshing, setRefreshing] = useState<boolean>(false);
+
+  const linkedJournals = useMemo<LinkedJournal[]>(() => {
+    if (!selectedPrayer) return [];
+    return journals
+      .filter((j) => j.linked_prayer_id === selectedPrayer.id)
+      .map((j) => ({
+        id: j.id,
+        date: j.date,
+        preview: j.content, // Will display full content in modal
+      }));
+  }, [selectedPrayer, journals]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -196,9 +211,11 @@ export default function HomeScreen() {
         visible={showPrayerModal}
         onClose={() => setShowPrayerModal(false)}
         prayer={selectedPrayer}
-        linkedJournals={[]}
+        linkedJournals={linkedJournals}
         onSave={handleSavePrayer}
         onDelete={handleDeletePrayer}
+        onUpdateJournal={handleUpdateJournal}
+        onDeleteJournal={handleDeleteJournal}
       />
     </View>
   );

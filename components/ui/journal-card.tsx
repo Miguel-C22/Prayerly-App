@@ -7,9 +7,15 @@ export interface JournalCardProps {
   date: string;
   preview: string;
   onPress: () => void;
+  truncate?: boolean;
 }
 
-export default function JournalCard({ date, preview, onPress }: JournalCardProps) {
+export default function JournalCard({
+  date,
+  preview,
+  onPress,
+  truncate = true
+}: JournalCardProps) {
   const { colors, neutral } = useTheme();
 
   return (
@@ -19,6 +25,7 @@ export default function JournalCard({ date, preview, onPress }: JournalCardProps
         { backgroundColor: colors.card },
       ]}
       onPress={onPress}
+      activeOpacity={0.7}
     >
       <View style={styles.content}>
         <Text style={[styles.date, { color: neutral.primary }]}>
@@ -26,12 +33,14 @@ export default function JournalCard({ date, preview, onPress }: JournalCardProps
         </Text>
         <Text
           style={[styles.preview, { color: colors.text }]}
-          numberOfLines={2}
+          numberOfLines={truncate ? 2 : undefined}
         >
           {preview}
         </Text>
       </View>
-      <Ionicons name="chevron-forward" size={20} color={neutral.primary} />
+      {truncate && (
+        <Ionicons name="chevron-forward" size={20} color={neutral.primary} />
+      )}
     </TouchableOpacity>
   );
 }

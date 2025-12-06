@@ -1,9 +1,11 @@
 import Button from "@/components/ui/button";
 import ErrorState from "@/components/ui/error-state";
 import Input from "@/components/ui/input";
+import JournalCard from "@/components/ui/journal-card";
 import ModalHeader from "@/components/ui/modal-header";
 import { useTheme } from "@/hooks/use-theme";
 import { Prayer } from "@/services/prayers";
+import JournalEditModal, { JournalEntry } from "./journal-edit-modal";
 import React, { useEffect, useState } from "react";
 import {
   KeyboardAvoidingView,
@@ -31,6 +33,8 @@ export interface PrayerViewModalProps {
   linkedJournals: LinkedJournal[];
   onSave: (prayer: Prayer) => Promise<void>;
   onDelete: (prayerId: string) => Promise<void>;
+  onUpdateJournal: (journal: JournalEntry) => Promise<void>;
+  onDeleteJournal: (journalId: string) => Promise<void>;
 }
 
 export default function PrayerViewModal({
@@ -40,14 +44,18 @@ export default function PrayerViewModal({
   linkedJournals,
   onSave,
   onDelete,
+  onUpdateJournal,
+  onDeleteJournal,
 }: PrayerViewModalProps) {
-  const { colors, neutral, isDark } = useTheme();
+  const { colors, neutral } = useTheme();
   const insets = useSafeAreaInsets();
   const [title, setTitle] = useState<string>("");
   const [description, setDescription] = useState<string>("");
   const [answered, setAnswered] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedJournal, setSelectedJournal] = useState<JournalEntry | null>(null);
+  const [showJournalModal, setShowJournalModal] = useState<boolean>(false);
 
   useEffect(() => {
     if (prayer) {
@@ -93,6 +101,16 @@ export default function PrayerViewModal({
     }
   };
 
+  const handleJournalPress = (journal: LinkedJournal) => {
+    setSelectedJournal({
+      id: journal.id,
+      date: journal.date,
+      content: journal.preview,
+      linkedPrayerId: prayer?.id,
+    });
+    setShowJournalModal(true);
+  };
+
   if (!prayer) return null;
 
   return (
@@ -133,7 +151,8 @@ export default function PrayerViewModal({
             {/* Title Input */}
             <Input
               variant="minimal"
-              displayLabel={false}
+              displayLabel
+              label="Title"
               placeholder="Enter prayer title..."
               value={title}
               onChangeText={setTitle}
@@ -144,7 +163,8 @@ export default function PrayerViewModal({
             {/* Description Input */}
             <Input
               variant="minimal"
-              displayLabel={false}
+              displayLabel
+              label="Description"
               placeholder="Add a description for your prayer..."
               value={description}
               onChangeText={setDescription}
@@ -153,19 +173,6 @@ export default function PrayerViewModal({
               editable={!loading}
               style={styles.descriptionInput}
             />
-
-            {/* Divider */}
-            <View
-              style={[
-                styles.divider,
-                { backgroundColor: isDark ? colors.card : "#000000" },
-              ]}
-            />
-
-            {/* Date */}
-            <Text style={[styles.date, { color: colors.subtext }]}>
-              Created {new Date(prayer.created_at).toLocaleDateString()}
-            </Text>
 
             {/* Answered Toggle */}
             <View
@@ -183,32 +190,20 @@ export default function PrayerViewModal({
               />
             </View>
 
-            {/* Linked Journals */}
+            {/* Journals */}
             {linkedJournals.length > 0 && (
               <View style={styles.section}>
                 <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                  Linked Journals
+                  Journals
                 </Text>
                 {linkedJournals.map((journal) => (
-                  <View
+                  <JournalCard
                     key={journal.id}
-                    style={[
-                      styles.journalItem,
-                      { backgroundColor: colors.card },
-                    ]}
-                  >
-                    <Text
-                      style={[styles.journalDate, { color: neutral.primary }]}
-                    >
-                      {journal.date}
-                    </Text>
-                    <Text
-                      style={[styles.journalPreview, { color: colors.subtext }]}
-                      numberOfLines={2}
-                    >
-                      {journal.preview}
-                    </Text>
-                  </View>
+                    date={journal.date}
+                    preview={journal.preview}
+                    onPress={() => handleJournalPress(journal)}
+                    truncate={false}
+                  />
                 ))}
               </View>
             )}
@@ -216,6 +211,11 @@ export default function PrayerViewModal({
 
           {/* Footer - Fixed at bottom */}
           <View style={styles.footer}>
+            {/* Created Date */}
+            <Text style={[styles.createdDate, { color: colors.subtext }]}>
+              Created {new Date(prayer.created_at).toLocaleDateString()}
+            </Text>
+
             {/* Delete Button */}
             <Button
               label="Delete Prayer"
@@ -226,6 +226,15 @@ export default function PrayerViewModal({
             />
           </View>
         </View>
+
+        {/* Journal Edit Modal */}
+        <JournalEditModal
+          visible={showJournalModal}
+          onClose={() => setShowJournalModal(false)}
+          journal={selectedJournal}
+          onSave={onUpdateJournal}
+          onDelete={onDeleteJournal}
+        />
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -254,14 +263,10 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
     paddingTop: 12,
   },
-  divider: {
-    height: 1,
-    marginVertical: 16,
-  },
-  date: {
-    fontSize: 13,
-    color: "#999",
-    marginBottom: 8,
+  createdDate: {
+    fontSize: 12,
+    textAlign: "center",
+    marginBottom: 16,
   },
   answeredSection: {
     flexDirection: "row",
@@ -270,7 +275,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: 20,
     borderRadius: 16,
-    marginTop: 16,
+    marginTop: 8,
     marginBottom: 24,
   },
   answeredLabel: {
@@ -297,20 +302,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     marginBottom: 12,
-  },
-  journalItem: {
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 10,
-  },
-  journalDate: {
-    fontSize: 14,
-    fontWeight: "600",
-    marginBottom: 6,
-  },
-  journalPreview: {
-    fontSize: 14,
-    lineHeight: 20,
   },
   deleteButton: {
     backgroundColor: "transparent",

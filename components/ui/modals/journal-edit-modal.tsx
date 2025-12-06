@@ -72,6 +72,7 @@ export default function JournalEditModal({
         content,
         linkedPrayerId: selectedPrayer?.id,
       });
+      onClose();
     } catch (err) {
       setError("Failed to save journal. Please try again.");
       setLoading(false);
@@ -87,6 +88,7 @@ export default function JournalEditModal({
 
     try {
       await onDelete(journal.id);
+      onClose();
       setLoading(false);
     } catch (err) {
       setError("Failed to delete journal. Please try again.");
