@@ -6,6 +6,7 @@ export interface Prayer {
   title: string;
   description?: string;
   answered: boolean;
+  tag_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -14,19 +15,22 @@ export interface CreatePrayerData {
   title: string;
   description?: string;
   answered?: boolean;
+  tag_id?: string | null;
 }
 
 export interface UpdatePrayerData {
   title?: string;
   description?: string;
   answered?: boolean;
+  tag_id?: string | null;
 }
 
 /**
  * Get all prayers for the current authenticated user
+ * @param tagId - Optional tag ID to filter prayers by tag
  * @returns Array of prayers or null if error
  */
-export async function getPrayers() {
+export async function getPrayers(tagId?: string | null) {
   try {
     const {
       data: { user },
@@ -36,11 +40,17 @@ export async function getPrayers() {
       throw new Error("No authenticated user");
     }
 
-    const { data, error } = await supabase
+    let query = supabase
       .from("prayers")
       .select("*")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false });
+      .eq("user_id", user.id);
+
+    // Add tag filter if provided
+    if (tagId) {
+      query = query.eq("tag_id", tagId);
+    }
+
+    const { data, error } = await query.order("created_at", { ascending: false });
 
     if (error) throw error;
 
@@ -74,6 +84,7 @@ export async function createPrayer(prayerData: CreatePrayerData) {
         title: prayerData.title,
         description: prayerData.description,
         answered: prayerData.answered ?? false,
+        tag_id: prayerData.tag_id ?? null,
       })
       .select()
       .single();

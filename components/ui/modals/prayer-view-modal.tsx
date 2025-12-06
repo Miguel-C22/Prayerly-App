@@ -3,8 +3,11 @@ import ErrorState from "@/components/ui/error-state";
 import Input from "@/components/ui/input";
 import JournalCard from "@/components/ui/journal-card";
 import ModalHeader from "@/components/ui/modal-header";
+import TagPickerModal from "@/components/ui/modals/tag-picker-modal";
+import TagSelectorCard from "@/components/ui/tag-selector-card";
 import { useTheme } from "@/hooks/use-theme";
 import { Prayer } from "@/services/prayers";
+import { Tag } from "@/services/tags";
 import JournalEditModal, { JournalEntry } from "./journal-edit-modal";
 import React, { useEffect, useState } from "react";
 import {
@@ -31,6 +34,7 @@ export interface PrayerViewModalProps {
   onClose: () => void;
   prayer: Prayer | null;
   linkedJournals: LinkedJournal[];
+  tags: Tag[];
   onSave: (prayer: Prayer) => Promise<void>;
   onDelete: (prayerId: string) => Promise<void>;
   onUpdateJournal: (journal: JournalEntry) => Promise<void>;
@@ -42,6 +46,7 @@ export default function PrayerViewModal({
   onClose,
   prayer,
   linkedJournals,
+  tags,
   onSave,
   onDelete,
   onUpdateJournal,
@@ -52,16 +57,19 @@ export default function PrayerViewModal({
   const [title, setTitle] = useState<string>("");
   const [description, setDescription] = useState<string>("");
   const [answered, setAnswered] = useState<boolean>(false);
+  const [tagId, setTagId] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedJournal, setSelectedJournal] = useState<JournalEntry | null>(null);
   const [showJournalModal, setShowJournalModal] = useState<boolean>(false);
+  const [showTagPicker, setShowTagPicker] = useState<boolean>(false);
 
   useEffect(() => {
     if (prayer) {
       setTitle(prayer.title);
       setDescription(prayer.description || "");
       setAnswered(prayer.answered);
+      setTagId(prayer.tag_id || null);
       setError(null);
     }
   }, [prayer]);
@@ -78,6 +86,7 @@ export default function PrayerViewModal({
         title: title.trim(),
         description: description.trim() || undefined,
         answered: answered,
+        tag_id: tagId,
       });
       setLoading(false);
     } catch (err) {
@@ -174,6 +183,14 @@ export default function PrayerViewModal({
               style={styles.descriptionInput}
             />
 
+            {/* Tag Selector */}
+            <TagSelectorCard
+              tags={tags}
+              selectedTagId={tagId}
+              onPress={() => setShowTagPicker(true)}
+              disabled={loading}
+            />
+
             {/* Answered Toggle */}
             <View
               style={[styles.answeredSection, { backgroundColor: colors.card }]}
@@ -226,6 +243,15 @@ export default function PrayerViewModal({
             />
           </View>
         </View>
+
+        {/* Tag Picker Modal */}
+        <TagPickerModal
+          visible={showTagPicker}
+          onClose={() => setShowTagPicker(false)}
+          tags={tags}
+          selectedTagId={tagId}
+          onSelectTag={setTagId}
+        />
 
         {/* Journal Edit Modal */}
         <JournalEditModal

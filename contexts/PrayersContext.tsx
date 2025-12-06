@@ -1,5 +1,6 @@
 import useFetchAllPrayers from "@/hooks/use-fetch-all-prayers";
 import { Prayer } from "@/services/prayers";
+import { PRAYER_FILTERING_THRESHOLD } from "@/constants/app-config";
 import React, {
   createContext,
   useContext,
@@ -12,6 +13,8 @@ interface PrayersContextType {
   prayers: Prayer[];
   loading: boolean;
   error: string | null;
+  selectedTagId: string | null;
+  setSelectedTagId: (tagId: string | null) => void;
   refetch: () => Promise<void>;
   createOptimistic: (prayer: Prayer) => void;
   updateOptimistic: (id: string, updates: Partial<Prayer>) => void;
@@ -24,18 +27,55 @@ const PrayersContext = createContext<PrayersContextType | undefined>(
 );
 
 export function PrayersProvider({ children }: { children: ReactNode }) {
+  const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
+  const [totalPrayerCount, setTotalPrayerCount] = useState<number>(0);
+
+  // Determine filtering mode based on prayer count
+  const useServerSideFiltering = totalPrayerCount >= PRAYER_FILTERING_THRESHOLD;
+
   const {
     allPrayers: fetchedPrayers,
     loading,
     error,
-    refetch: fetchFromDB,
-  } = useFetchAllPrayers();
+    refetchWithTag,
+  } = useFetchAllPrayers(useServerSideFiltering ? selectedTagId : null);
   const [prayers, setPrayers] = useState<Prayer[]>(fetchedPrayers);
 
-  // Sync with fetched data on initial load and refetch
+  // Sync with fetched data and apply client-side filtering when below threshold
   useEffect(() => {
-    setPrayers(fetchedPrayers);
-  }, [fetchedPrayers]);
+    if (useServerSideFiltering) {
+      // Server already filtered, use as-is
+      setPrayers(fetchedPrayers);
+    } else {
+      // Client-side filtering needed
+      if (selectedTagId === null) {
+        // Show all prayers
+        setPrayers(fetchedPrayers);
+      } else {
+        // Filter by selected tag
+        const filtered = fetchedPrayers.filter(
+          (prayer) => prayer.tag_id === selectedTagId
+        );
+        setPrayers(filtered);
+      }
+    }
+
+    // Update total count when fetching all prayers (not when fetching filtered subset)
+    if (selectedTagId === null || !useServerSideFiltering) {
+      setTotalPrayerCount(fetchedPrayers.length);
+    }
+  }, [fetchedPrayers, selectedTagId, useServerSideFiltering]);
+
+  // Debug logging for filtering mode (development only)
+  useEffect(() => {
+    if (__DEV__) {
+      console.log(
+        `Prayer filtering mode: ${
+          useServerSideFiltering ? "SERVER-SIDE" : "CLIENT-SIDE"
+        } (${totalPrayerCount} prayers)`
+      );
+    }
+  }, [useServerSideFiltering, totalPrayerCount]);
 
   const createOptimistic = (prayer: Prayer) => {
     setPrayers((prev) => [prayer, ...prev]);
@@ -52,11 +92,11 @@ export function PrayersProvider({ children }: { children: ReactNode }) {
   };
 
   const revert = async () => {
-    await fetchFromDB();
+    await refetchWithTag(selectedTagId);
   };
 
   const refetch = async () => {
-    await fetchFromDB();
+    await refetchWithTag(selectedTagId);
   };
 
   return (
@@ -65,6 +105,8 @@ export function PrayersProvider({ children }: { children: ReactNode }) {
         prayers,
         loading,
         error,
+        selectedTagId,
+        setSelectedTagId,
         refetch,
         createOptimistic,
         updateOptimistic,

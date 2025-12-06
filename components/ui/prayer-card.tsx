@@ -1,5 +1,6 @@
 import { useTheme } from "@/hooks/use-theme";
 import { Prayer } from "@/services/prayers";
+import { Tag } from "@/services/tags";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import {
@@ -11,14 +12,19 @@ import {
 
 export interface PrayerCardProps {
   prayer: Prayer;
+  tag?: Tag | null;
   onPress: () => void;
 }
 
 export default function PrayerCard({
   prayer,
+  tag,
   onPress,
 }: PrayerCardProps) {
   const { colors, neutral } = useTheme();
+
+  // Get icon from tag or use default
+  const iconName = tag?.icon_name || 'hand-left';
 
   return (
     <TouchableOpacity
@@ -29,7 +35,7 @@ export default function PrayerCard({
         <View
           style={[styles.iconContainer, { backgroundColor: colors.background }]}
         >
-          <Ionicons name="hand-left" size={20} color={neutral.primary} />
+          <Ionicons name={iconName as any} size={20} color={neutral.primary} />
         </View>
         <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
           {prayer.title}

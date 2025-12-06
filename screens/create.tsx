@@ -4,6 +4,8 @@ import PrayerPickerModal from "@/components/ui/modals/prayer-picker-modal";
 import ReminderSettingsModal, {
   ReminderSettings,
 } from "@/components/ui/modals/reminder-settings-modal";
+import TagPickerModal from "@/components/ui/modals/tag-picker-modal";
+import TagSelectorCard from "@/components/ui/tag-selector-card";
 import SegmentedControl from "@/components/ui/segmented-control";
 import { useJournal } from "@/contexts/JournalContext";
 import { usePrayers } from "@/contexts/PrayersContext";
@@ -12,8 +14,9 @@ import { useTheme } from "@/hooks/use-theme";
 import { createJournal } from "@/services/journal";
 import { createPrayer, Prayer } from "@/services/prayers";
 import { setReminder } from "@/services/reminders";
+import { getTags, Tag } from "@/services/tags";
 import { Ionicons } from "@expo/vector-icons";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   ScrollView,
   StyleSheet,
@@ -36,13 +39,25 @@ export default function CreateScreen() {
   const [showPrayerPicker, setShowPrayerPicker] = useState<boolean>(false);
   const [showReminderSettings, setShowReminderSettings] =
     useState<boolean>(false);
+  const [showTagPicker, setShowTagPicker] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isLoadingJournal, setIsLoadingJournal] = useState<boolean>(false);
+  const [tags, setTags] = useState<Tag[]>([]);
+  const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
   const { createOptimistic: createPrayerOptimistic, revert: revertPrayers } =
     usePrayers();
   const { createOptimistic: createReminderOptimistic } = useReminders();
   const { createOptimistic: createJournalOptimistic, revert: revertJournals } =
     useJournal();
+
+  // Fetch tags on mount
+  useEffect(() => {
+    const fetchTags = async () => {
+      const { data } = await getTags();
+      if (data) setTags(data);
+    };
+    fetchTags();
+  }, []);
 
   const handleCreatePrayer = async () => {
     try {
@@ -52,6 +67,7 @@ export default function CreateScreen() {
       const { data: prayer, error: prayerError } = await createPrayer({
         title: prayerTitle,
         description: prayerDescription,
+        tag_id: selectedTagId,
       });
 
       if (prayerError || !prayer) {
@@ -91,6 +107,7 @@ export default function CreateScreen() {
       setPrayerTitle("");
       setPrayerDescription("");
       setReminderSettings({ type: null, time: "9:00 AM" });
+      setSelectedTagId(null);
     } catch (error) {
       await revertPrayers();
     } finally {
@@ -176,6 +193,12 @@ export default function CreateScreen() {
               label="Description"
               multiline={true}
               style={{ height: 200, paddingTop: 16 }}
+            />
+
+            <TagSelectorCard
+              tags={tags}
+              selectedTagId={selectedTagId}
+              onPress={() => setShowTagPicker(true)}
             />
 
             <TouchableOpacity
@@ -281,6 +304,15 @@ export default function CreateScreen() {
         onClose={() => setShowPrayerPicker(false)}
         selectedPrayer={linkedPrayer}
         onSelectPrayer={setLinkedPrayer}
+      />
+
+      {/* Tag Picker Modal */}
+      <TagPickerModal
+        visible={showTagPicker}
+        onClose={() => setShowTagPicker(false)}
+        tags={tags}
+        selectedTagId={selectedTagId}
+        onSelectTag={setSelectedTagId}
       />
 
       {/* Reminder Settings Modal */}

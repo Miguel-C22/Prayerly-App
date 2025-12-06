@@ -4,13 +4,18 @@ import PrayerViewModal, { LinkedJournal } from "@/components/ui/modals/prayer-vi
 import PrayerCard from "@/components/ui/prayer-card";
 import SearchInput from "@/components/ui/search-input";
 import SegmentedControl from "@/components/ui/segmented-control";
+import StatusCard from "@/components/ui/status-card";
+import TagFilterList from "@/components/ui/tag-filter-list";
+import VerseCard from "@/components/ui/verse-card";
+import { getRandomVerse } from "@/constants/verses";
 import { usePrayers } from "@/contexts/PrayersContext";
 import { useReminders } from "@/contexts/RemindersContext";
 import { useJournal } from "@/contexts/JournalContext";
 import { useTheme } from "@/hooks/use-theme";
 import { useJournalActions } from "@/hooks/use-journal-actions";
 import { deletePrayer, Prayer, updatePrayer } from "@/services/prayers";
-import { useState, useMemo } from "react";
+import { getTags, Tag } from "@/services/tags";
+import { useState, useMemo, useEffect } from "react";
 import {
   Pressable,
   RefreshControl,
@@ -30,6 +35,8 @@ export default function HomeScreen() {
     updateOptimistic,
     deleteOptimistic,
     revert,
+    selectedTagId,
+    setSelectedTagId,
   } = usePrayers();
   const {
     refetch: refetchReminders,
@@ -44,6 +51,17 @@ export default function HomeScreen() {
   const [selectedPrayer, setSelectedPrayer] = useState<Prayer | null>(null);
   const [showPrayerModal, setShowPrayerModal] = useState<boolean>(false);
   const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [tags, setTags] = useState<Tag[]>([]);
+  const [currentVerse] = useState(() => getRandomVerse());
+
+  // Fetch tags on mount
+  useEffect(() => {
+    const fetchTags = async () => {
+      const { data } = await getTags();
+      if (data) setTags(data);
+    };
+    fetchTags();
+  }, []);
 
   const linkedJournals = useMemo<LinkedJournal[]>(() => {
     if (!selectedPrayer) return [];
@@ -96,6 +114,7 @@ export default function HomeScreen() {
         title: updatedPrayer.title,
         description: updatedPrayer.description,
         answered: updatedPrayer.answered,
+        tag_id: updatedPrayer.tag_id,
       };
 
       // Optimistically update both contexts
@@ -122,7 +141,12 @@ export default function HomeScreen() {
     }
   };
 
-  // Filter prayers based on tab and search
+  // Calculate stats for status card
+  const unansweredCount = prayers.filter((p) => !p.answered).length;
+  const answeredCount = prayers.filter((p) => p.answered).length;
+  const journalCount = journals.length;
+
+  // Filter prayers based on tab and search (tags filtered server-side)
   const filteredPrayers = prayers.filter((prayer) => {
     const matchesTab = selectedTab === 0 ? !prayer.answered : prayer.answered;
     const matchesSearch = prayer.title
@@ -130,6 +154,12 @@ export default function HomeScreen() {
       .includes(searchQuery.toLowerCase());
     return matchesTab && matchesSearch;
   });
+
+  // Get tag for each prayer
+  const getPrayerTag = (prayer: Prayer) => {
+    if (!prayer.tag_id) return null;
+    return tags.find((tag) => tag.id === prayer.tag_id) || null;
+  };
 
   if (loading && prayers.length === 0) {
     return (
@@ -149,62 +179,78 @@ export default function HomeScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={styles.content}>
-        {/* Segmented Control */}
-        <SegmentedControl
-          options={["Unanswered", "Answered"]}
-          selectedIndex={selectedTab}
-          onSelect={setSelectedTab}
-        />
+      <ScrollView
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+        alwaysBounceVertical={true}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={neutral.primary}
+            colors={[neutral.primary]}
+          />
+        }
+      >
+        <View style={styles.content}>
+          {/* Verse Card */}
+          <VerseCard verse={currentVerse} />
 
-        {/* Search Input */}
-        <SearchInput
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          placeholder="Search prayers..."
-        />
+          {/* Status Card */}
+          <StatusCard
+            unansweredCount={unansweredCount}
+            answeredCount={answeredCount}
+            journalCount={journalCount}
+          />
 
-        {/* Prayer List */}
-        <ScrollView
-          style={styles.scrollView}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
-          alwaysBounceVertical={true}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={handleRefresh}
-              tintColor={neutral.primary}
-              colors={[neutral.primary]}
-            />
-          }
-        >
+          {/* Tag Filter List */}
+          <TagFilterList
+            tags={tags}
+            selectedTagId={selectedTagId}
+            onSelectTag={setSelectedTagId}
+          />
+
+          {/* Segmented Control */}
+          <SegmentedControl
+            options={["Unanswered", "Answered"]}
+            selectedIndex={selectedTab}
+            onSelect={setSelectedTab}
+          />
+
+          {/* Search Input */}
+          <SearchInput
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search prayers..."
+          />
+
+          {/* Prayer List */}
           {filteredPrayers.length === 0 ? (
-            <Pressable style={styles.fillSpaceEmpty} onPress={() => {}}>
-              <View style={styles.emptyState}>
-                <Text style={[styles.emptyText, { color: colors.subtext }]}>
-                  {searchQuery
-                    ? "No prayers found"
-                    : selectedTab === 0
-                    ? "No unanswered prayers"
-                    : "No answered prayers yet"}
-                </Text>
-              </View>
-            </Pressable>
+            <View style={styles.emptyState}>
+              <Text style={[styles.emptyText, { color: colors.subtext }]}>
+                {searchQuery
+                  ? "No prayers found"
+                  : selectedTab === 0
+                  ? "No unanswered prayers"
+                  : "No answered prayers yet"}
+              </Text>
+            </View>
           ) : (
             <>
               {filteredPrayers.map((prayer) => (
                 <PrayerCard
                   key={prayer.id}
                   prayer={prayer}
+                  tag={getPrayerTag(prayer)}
                   onPress={() => handleOpenPrayer(prayer)}
                 />
               ))}
-              <Pressable style={styles.fillSpace} onPress={() => {}} />
+              <View style={styles.fillSpace} />
             </>
           )}
-        </ScrollView>
-      </View>
+        </View>
+      </ScrollView>
 
       {/* Prayer Modal */}
       <PrayerViewModal
@@ -212,6 +258,7 @@ export default function HomeScreen() {
         onClose={() => setShowPrayerModal(false)}
         prayer={selectedPrayer}
         linkedJournals={linkedJournals}
+        tags={tags}
         onSave={handleSavePrayer}
         onDelete={handleDeletePrayer}
         onUpdateJournal={handleUpdateJournal}
@@ -226,7 +273,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    flex: 1,
     paddingHorizontal: 16,
     paddingTop: 16,
   },
@@ -235,18 +281,14 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: 40,
-    flexGrow: 1,
   },
   fillSpace: {
     height: 100,
   },
-  fillSpaceEmpty: {
-    flex: 1,
-  },
   emptyState: {
-    flex: 1,
     alignItems: "center",
     paddingTop: 60,
+    paddingBottom: 60,
   },
   emptyText: {
     fontSize: 16,

@@ -1,17 +1,17 @@
 import { getPrayers, Prayer } from "@/services/prayers";
 import { useEffect, useState } from "react";
 
-export function useFetchAllPrayers() {
+export function useFetchAllPrayers(tagId?: string | null) {
   const [allPrayers, setAllPrayers] = useState<Prayer[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchPrayers = async () => {
+  const fetchPrayers = async (filterTagId?: string | null) => {
     try {
       setLoading(true);
       setError(null);
 
-      const { data, error: fetchError } = await getPrayers();
+      const { data, error: fetchError } = await getPrayers(filterTagId ?? tagId);
 
       if (fetchError) {
         setError("Failed to fetch prayers");
@@ -28,9 +28,13 @@ export function useFetchAllPrayers() {
 
   useEffect(() => {
     fetchPrayers();
-  }, []);
+  }, [tagId]);
 
-  return { allPrayers, loading, error, refetch: fetchPrayers };
+  const refetchWithTag = async (newTagId?: string | null) => {
+    await fetchPrayers(newTagId);
+  };
+
+  return { allPrayers, loading, error, refetch: fetchPrayers, refetchWithTag };
 }
 
 export default useFetchAllPrayers;
